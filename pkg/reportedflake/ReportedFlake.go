@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	ci "github.com/RobertKielty/flake-traker/pkg/cistatus"
+	ci "github.com/RobertKielty/flake-tracker/pkg/cistatus"
 	"github.com/google/go-github/github"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/oauth2"
@@ -36,8 +36,8 @@ var (
 type ReportedFlake struct {
 	ghId, repo, job string
 	tests           []string
-	Logger          log.Logger
-	ciStatus        ci.CiStatus
+	Logger          *log.Logger
+	CiStatus        *ci.CiStatus
 }
 
 // Decoration of a GH Issue with flake-related data extracted from issue comments
@@ -106,7 +106,7 @@ func (rf *ReportedFlake) decorateFlakeIssue(i *github.Issue) error {
 		if j != "" {
 			// TODO figure out how the class collaborate!
 			// pass in a ref to the cisignal summary object so we can do this lookup
-			job, exists := rf.ciStatus.FlakingJobs[j]
+			job, exists := rf.CiStatus.FlakingJobs[j]
 			if exists {
 				for _, test := range job.JobTestResults.Tests {
 					test.LinkedBugs = make([]interface{}, len(ta))
@@ -127,7 +127,7 @@ func (rf *ReportedFlake) decorateFlakeIssue(i *github.Issue) error {
 
 // CollectIssuesFromBoard retrieves logged Flake Issues from the CI Signal Board
 // and adds them to the LinkedBugs[] on the jobTestResults
-func (rf *ReportedFlake) CollectIssuesFromBoard() {
+func (rf *ReportedFlake) CollectIssuesFromBoard(cs *ci.CiStatus) {
 
 	githubApiToken := os.Getenv("GITHUB_AUTH_TOKEN")
 	if githubApiToken == "" {
@@ -231,7 +231,7 @@ func (rf *ReportedFlake) getReportedTests(b string) ([]string, error) {
 	}
 	return tests, nil
 }
-
+// getIssueDetail
 func (rf *ReportedFlake) getIssueDetail(client *github.Client, jobSummaryUrl string) (*github.Issue, error) {
 	rf.Logger.Tracef("getIssueDetail %s\n", jobSummaryUrl)
 	if jobSummaryUrl == "" {

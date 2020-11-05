@@ -5,8 +5,8 @@ import (
 	"os"
 	"time"
 
-	ci "github.com/RobertKielty/flake-traker/pkg/cistatus"
-	rf "github.com/RobertKielty/flake-traker/pkg/reportedflake"
+	ci "github.com/RobertKielty/flake-tracker/pkg/cistatus"
+	rf "github.com/RobertKielty/flake-tracker/pkg/reportedflake"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -113,7 +113,7 @@ func main() {
 	var ghLogger = setUpLogging("gh-logger", startTime)
 
 	tgBlocking := &ci.CiStatus{
-		Name:        "sig-release-master-blocking",
+		Name:        "sig-release-master-informing",
 		CollectedAt: startTime,
 		Logger:      ciStatusLogger,
 	}

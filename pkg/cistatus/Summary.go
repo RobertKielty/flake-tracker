@@ -28,7 +28,7 @@ type CiStatus struct {
 	FlakingJobs        map[string]JobStatus
 	PassingJobs        map[string]JobStatus
 	FailedJobs         map[string]JobStatus
-	Logger             log.Logger
+	Logger             *log.Logger
 }
 
 // JobStatus mirrors data on the TestGrid summary status
@@ -81,7 +81,7 @@ type testGridJobResult struct {
 		Target       string      `json:"target"`
 		UserProperty interface{} `json:"user_property"`
 		// Calculated Field added here
-		sig string
+		Sig string
 	} `json:"tests"`
 	/*  Remainder of Unused fields
 		RowIds       []string    `json:"row_ids"`
@@ -221,9 +221,9 @@ func addSigToTestResults(tgJobResult *testGridJobResult) {
 	for i, t := range tgJobResult.Tests {
 		sig := sigRe.FindString(t.Name)
 		if sig != "" {
-			tgJobResult.Tests[i].sig = sig
+			tgJobResult.Tests[i].Sig = sig
 		} else {
-			tgJobResult.Tests[i].sig = "job-owner"
+			tgJobResult.Tests[i].Sig = "job-owner"
 		}
 	}
 	return
