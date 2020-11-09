@@ -52,7 +52,7 @@ func main() {
 		CiStatus: tgBlocking,
 	}
 	collectData(tgBlocking, reportedFlake) // TODO ciStatus && reportedFlake need to be decoupled
-	rep.RunReport(tgBlocking)                  // TODO extract runReport to a reporter class parameterised on format
+	rep.RunMarkdownSummaryReport(*tgBlocking)
 	tgBlocking.Logger.Writer().Close()
 }
 
