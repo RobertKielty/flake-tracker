@@ -17,6 +17,7 @@ import (
 const (
 	TG_TABGROUP_SUMMARY_FMT string = "https://testgrid.k8s.io/%s/summary"
 	TG_JOB_TEST_TABLE_FMT   string = "https://testgrid.k8s.io/%s/table?tab=%s&width=5&exclude-non-failed-tests=&sort-by-flakiness=&dashboard=%s"
+	TG_JOB_TEST_HUMAN_FMT   string = "https://testgrid.k8s.io/%s#%s&exclude-non-failed-tests="
 )
 
 // TabGroupStatus tracks status of CI Jobs for a named TestGrid TabGroup
@@ -41,6 +42,7 @@ type JobStatus struct {
 	LatestStatusIcon        string             `json:"overall_status_icon"`
 	LatestStatusDescription string             `json:"status"`
 	Url                     string             // Url for testGridJobResult
+	HumanUrl                string             // Url for readable page on TestGrid
 	JobTestResults          *testGridJobResult // See CollectFlakyTests
 }
 
@@ -155,13 +157,13 @@ type testGridJobResult struct {
 func (t *CiStatus) CollectFlakyTests() error {
 
 	for jobName := range t.FlakingJobs {
-		url := fmt.Sprintf(TG_JOB_TEST_TABLE_FMT,
+		tgTabUrl := fmt.Sprintf(TG_JOB_TEST_TABLE_FMT,
 			t.Name, url.QueryEscape(jobName), t.Name)
 
-		resp, err := http.Get(url)
+		resp, err := http.Get(tgTabUrl)
 
 		if err != nil {
-			t.Logger.Error("HTTP get job test results", err, url)
+			t.Logger.Error("HTTP get job test results", err, tgTabUrl)
 			return err
 		}
 
@@ -169,19 +171,34 @@ func (t *CiStatus) CollectFlakyTests() error {
 		var flakingTestResults testGridJobResult
 		err = json.Unmarshal(body, &flakingTestResults)
 		if err != nil {
-			t.Logger.Error("Unmarshalling Test Result", err, url)
+			t.Logger.Error("Unmarshalling Test Result", err, tgTabUrl)
 			return err
 		}
+		humanUrl := fmt.Sprintf(TG_JOB_TEST_HUMAN_FMT,
+			t.Name, url.QueryEscape(jobName))
 		// SearchLoggedIssues()
 		// Store data and url where we found it. tmp var used as per
 		// https://github.com/golang/go/issues/3117#issuecomment-66063615
 		var tmp = t.FlakingJobs[jobName]
 		addSigToTestResults(&flakingTestResults)
 		tmp.JobTestResults = &flakingTestResults
-		tmp.Url = url
+		tmp.Url = tgTabUrl
+		tmp.HumanUrl = humanUrl
 		t.FlakingJobs[jobName] = tmp
 	}
 	return nil
+}
+
+// CollectPassingJobUrls sets human job URL on passing jobs map
+func (t *CiStatus) CollectPassingJobnames() {
+
+	for jobName := range t.PassingJobs {
+		humanUrl := fmt.Sprintf(TG_JOB_TEST_HUMAN_FMT,
+			t.Name, url.QueryEscape(jobName))
+		var tmp = t.PassingJobs[jobName]
+		tmp.HumanUrl = humanUrl
+		t.PassingJobs[jobName] = tmp
+	}
 }
 
 // CollectFailedTests adds a list of Tests that are failing for each Failed Job
@@ -278,4 +295,49 @@ func (t *CiStatus) CollectStatus() error {
 
 	t.Count = len(jobs)
 	return nil
+}
+
+// IsValidJob returns true if job j exists in CiStatus
+func (t *CiStatus) IsValidJob(j string) bool {
+	_, isPassingJob := t.PassingJobs[j]
+	_, isFailedJob := t.FailedJobs[j]
+	_, isFlakingJob := t.FlakingJobs[j]
+	return isPassingJob || isFlakingJob || isFailedJob
+}
+
+// GetJobStatus returns string representation of a job's status based on membership of the Job maps
+func (t *CiStatus) GetJobStatus(j string) string {
+	_, isPassingJob := t.PassingJobs[j]
+	_, isFailing := t.FailedJobs[j]
+	_, isFlakingJob := t.FlakingJobs[j]
+	if isPassingJob {
+		return "PASSING"
+	}
+	if isFailing {
+		return "FAILING"
+	}
+	if isFlakingJob {
+		return "FLAKING"
+	}
+	return "UKNOWN"
+}
+
+// GetJobsByStatus returns a string representation of all jobs
+func (t *CiStatus) GetJobsByStatus(s string) []string {
+	var jobs []string
+	switch s {
+	case "PASSING":
+		for j := range t.PassingJobs {
+			jobs = append(jobs, j)
+		}
+	case "FAILED":
+		for j := range t.FailedJobs {
+			jobs = append(jobs, j)
+		}
+	case "FLAKING":
+		for j := range t.FlakingJobs {
+			jobs = append(jobs, j)
+		}
+	}
+	return jobs
 }

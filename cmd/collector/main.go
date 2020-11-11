@@ -34,16 +34,13 @@ func collectData(cs *ci.CiStatus, rf *rf.ReportedFlake) {
 	rf.CollectIssuesFromBoard(cs)
 }
 
-
-
 func main() {
 	var startTime = time.Now()
-	// TODO this is messed up!
 	var ciStatusLogger = setUpLogging("ci-status", startTime)
 	var ghLogger = setUpLogging("gh-logger", startTime)
 
 	tgBlocking := &ci.CiStatus{
-		Name:        "sig-release-master-informing",
+		Name:        "sig-release-master-blocking",
 		CollectedAt: startTime,
 		Logger:      ciStatusLogger,
 	}
@@ -51,9 +48,22 @@ func main() {
 		Logger:   ghLogger,
 		CiStatus: tgBlocking,
 	}
-	collectData(tgBlocking, reportedFlake) // TODO ciStatus && reportedFlake need to be decoupled
+	collectData(tgBlocking, reportedFlake) // TODO decouple ciStatus && reportedFlake
 	rep.RunMarkdownSummaryReport(*tgBlocking)
 	tgBlocking.Logger.Writer().Close()
+
+	tgInforming := &ci.CiStatus{
+		Name:        "sig-release-master-informing",
+		CollectedAt: startTime,
+		Logger:      ciStatusLogger,
+	}
+	reportedFlake = &rf.ReportedFlake{
+		Logger:   ghLogger,
+		CiStatus: tgInforming,
+	}
+	collectData(tgInforming, reportedFlake) // TODO decouple ciStatus && reportedFlake
+	rep.RunMarkdownSummaryReport(*tgInforming)
+	tgInforming.Logger.Writer().Close()
 }
 
 func setUpLogging(name string, startTime time.Time) *log.Logger {
@@ -64,7 +74,10 @@ func setUpLogging(name string, startTime time.Time) *log.Logger {
 		logger        = log.New()
 	)
 
-	logger.SetFormatter(&log.JSONFormatter{})
+	// 	logger.SetFormatter(&log.JSONFormatter{})
+	logger.SetFormatter(&log.TextFormatter{
+		ForceColors: true,
+	})
 	logger.SetLevel(log.TraceLevel)
 
 	// For now, one human readable log file with datetime stamp per run

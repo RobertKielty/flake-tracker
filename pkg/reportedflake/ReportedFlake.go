@@ -77,11 +77,12 @@ func ParseTests(b string) ([]string, error) {
 	return tests, nil
 }
 
-// decorateFlakeIssue extracts flake-related data from a GitHub issue adding it to
-// t.FlakeIssues[job].jobTestResults.Tests.LinkedBugs  map key'd by CI jobName
-func (rf *ReportedFlake) decorateFlakeIssue(i *github.Issue) error {
+// linkIssueToFlakingJob extracts flake-related data testnames and jobnames from a GitHub issue adding it to
+// t.FlakeIssues[job].jobTestResults.Tests.LinkedBugs map key'd by CI jobName and where named tests match.
+func (rf *ReportedFlake) linkIssueToFlakingJob(i *github.Issue) error {
 	tgLink := tgUrl.FindString(*i.Body)
 	rf.Logger.Debugf("len(tgLin):%d", len(tgLink))
+
 	if len(tgLink) > 0 {
 		d, err := getCITargets(tgDashRE, tgLink)
 		if err != nil {
@@ -92,30 +93,44 @@ func (rf *ReportedFlake) decorateFlakeIssue(i *github.Issue) error {
 			return errors.New("Error decorating issue " + err.Error())
 		}
 
-		ta, err := rf.getReportedTests(*i.Body) // Getting tests from initial body for now may need to process comments aswel
+		reportedTests, err := rf.getReportedTests(*i.Body) // Getting tests from initial body for now; may need to process comments aswel
 		if err == nil {
 			return errors.New("Error decorating issue " + strconv.FormatInt(*i.ID, 10))
 		}
-		rf.Logger.Debugf("Issue has mentioned these tests :%v", ta)
+		rf.Logger.Debugf("Issue has mentioned these tests :%v", reportedTests)
 		// Append this report to the list of flakes logged against this job
 		var tmp actualFlake
 		tmp.dashboard = d
 		tmp.job = j
 		tmp.ghIssue = i
-		tmp.tests = ta
+		tmp.tests = reportedTests
 		if j != "" {
-			// TODO figure out how the class collaborate!
-			// pass in a ref to the cisignal summary object so we can do this lookup
-			job, exists := rf.CiStatus.FlakingJobs[j]
-			if exists {
-				for _, test := range job.JobTestResults.Tests {
-					test.LinkedBugs = make([]interface{}, len(ta))
-					for _, actualFlake := range ta {
-						if test.Name == actualFlake {
-							test.LinkedBugs = append(test.LinkedBugs, actualFlake)
+			// check that j is a valid job
+			if rf.CiStatus.IsValidJob(j) {
+				job, exists := rf.CiStatus.FlakingJobs[j]
+				if exists {
+					rf.Logger.Infof("LITFJ: Linking Reported Issue : %s %s\n", d, j)
+					for _, test := range job.JobTestResults.Tests {
+						test.LinkedBugs = make([]interface{}, len(reportedTests))
+						for _, reportedTest := range reportedTests { 
+							if test.Name == reportedTest {
+								rf.Logger.Infof("LITFJ: JOIN! %s == %s \n", test.Name, reportedTest)
+								test.LinkedBugs = append(test.LinkedBugs, tmp)
+							}
 						}
 					}
+				} else {
+					// TODO else statment can be removed in time
+					rf.Logger.Debugf("LITFJ : job %s not reported here", j)
 				}
+			} else {
+				rf.Logger.Errorf("LITFJ: Invalid Job Lookup %s := getCITargets(%s,%s)", j, tgJobRE.String(), tgLink)
+				rf.Logger.Errorf("LITFJ: job present as %s", rf.CiStatus.GetJobStatus(j))
+				rf.Logger.Errorf("LITFJ: PassingJobs %s", rf.CiStatus.GetJobsByStatus("PASSING"))
+				rf.Logger.Errorf("LITFJ: FailedJobs %s", rf.CiStatus.GetJobsByStatus("FAILED"))
+				rf.Logger.Errorf("LITFJ: FlakingJobs %s", rf.CiStatus.GetJobsByStatus("FLAKING"))
+
+				return errors.New("Job " + j + " not valid " + *i.Title + " " + i.GetHTMLURL())
 			}
 		}
 
@@ -178,9 +193,9 @@ func (rf *ReportedFlake) CollectIssuesFromBoard(cs *ci.CiStatus) {
 						card.GetContentURL(), card, err)
 					break
 				}
-				err = rf.decorateFlakeIssue(issue)
+				err = rf.linkIssueToFlakingJob(issue)
 				if err != nil {
-					rf.Logger.Errorf("Error decorating Flake for this card %s, %s\nReason: %v",
+					rf.Logger.Errorf("Error linking Flake for this card %s, %s\nReason: %v",
 						issue.GetTitle(), issue.GetURL(), err)
 					break
 				}
@@ -208,7 +223,7 @@ func getCITargets(re *regexp.Regexp, url string) (string, error) {
 
 // getReportedTests collects tests referenced in the body of a formatted Flake Issue on GitHub
 // Each non-empty line between "Which test(s) are flaking:" and Testgrid link:
-// is congetTestssidered to be a test
+// is considered to be a reported test
 func (rf *ReportedFlake) getReportedTests(b string) ([]string, error) {
 	var tests []string
 
@@ -231,6 +246,7 @@ func (rf *ReportedFlake) getReportedTests(b string) ([]string, error) {
 	}
 	return tests, nil
 }
+
 // getIssueDetail
 func (rf *ReportedFlake) getIssueDetail(client *github.Client, jobSummaryUrl string) (*github.Issue, error) {
 	rf.Logger.Tracef("getIssueDetail %s\n", jobSummaryUrl)
