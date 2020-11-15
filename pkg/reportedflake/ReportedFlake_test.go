@@ -9,8 +9,8 @@ import (
 // the heading Which tests are flaking:
 func TestParseTest(t *testing.T) {
 	var tests = []struct {
-		name string
-		input string
+		name        string
+		input       string
 		testsWanted []string
 	}{
 		{
@@ -21,7 +21,7 @@ func TestParseTest(t *testing.T) {
 Testgrid link:
 `,
 			// Note: Array iof strings that captures order in which tests are parsed
-			[]string{ "[sig-instrumentation] MetricsGrabber should grab all metrics from a Scheduler" }, 
+			[]string{"[sig-instrumentation] MetricsGrabber should grab all metrics from a Scheduler"},
 		},
 		{
 			"Mulitple tests - correctly reported",
@@ -36,7 +36,6 @@ Testgrid link:
 				"[sig-network] Services should be able to preserve UDP traffic when server pod cycles for a NodePort service",
 			},
 		},
-
 	}
 
 	for _, test := range tests {
@@ -45,11 +44,11 @@ Testgrid link:
 		reportedTests, _ := ParseTests(test.input)
 
 		actualTestCount := len(reportedTests)
-		expectedTestCount := len (test.testsWanted)
+		expectedTestCount := len(test.testsWanted)
 
 		if actualTestCount != expectedTestCount {
-			t.Errorf("\texpected to find %d reported test(s) but found %d\n",  expectedTestCount, actualTestCount )
-			t.Errorf("\treportTests are %v\n", reportedTests )
+			t.Errorf("\texpected to find %d reported test(s) but found %d\n", expectedTestCount, actualTestCount)
+			t.Errorf("\treportTests are %v\n", reportedTests)
 		}
 
 		for i, reportedTest := range reportedTests {
