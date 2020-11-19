@@ -47,6 +47,7 @@ type actualFlake struct {
 	job       string
 	tests     []string
 }
+// TODO use this !
 
 // parseTests collects tests referenced in the body of a formatted Flake Issue on GitHub
 // Each non-empty line between "Which test(s) are flaking:" and Testgrid link:
@@ -77,13 +78,14 @@ func ParseTests(b string) ([]string, error) {
 	return tests, nil
 }
 
-// linkIssueToFlakingJob extracts flake-related data testnames and jobnames from a GitHub issue adding it to
-// t.FlakeIssues[job].jobTestResults.Tests.LinkedBugs map key'd by CI jobName and where named tests match.
+// linkIssueToFlakingJob extracts flake-related data (testnames and jobnames) from the first comment in a GitHub issue
+// adding it to t.FlakeIssues[job].jobTestResults.Tests.LinkedBugs map key'd by CI job and where named tests match.
 func (rf *ReportedFlake) linkIssueToFlakingJob(i *github.Issue) error {
 	tgLink := tgUrl.FindString(*i.Body)
 	rf.Logger.Debugf("len(tgLin):%d", len(tgLink))
 
 	if len(tgLink) > 0 {
+		// So the hard part of this is the retrieval of dashboard/job/test from reported issues.
 		d, err := getCITargets(tgDashRE, tgLink)
 		if err != nil {
 			return errors.New("Error decorating issue " + err.Error())
@@ -97,7 +99,9 @@ func (rf *ReportedFlake) linkIssueToFlakingJob(i *github.Issue) error {
 		if err == nil {
 			return errors.New("Error decorating issue " + strconv.FormatInt(*i.ID, 10))
 		}
+
 		rf.Logger.Debugf("Issue has mentioned these tests :%v", reportedTests)
+
 		// Append this report to the list of flakes logged against this job
 		var tmp actualFlake
 		tmp.dashboard = d
@@ -207,7 +211,7 @@ func (rf *ReportedFlake) CollectIssuesFromBoard(cs *ci.CiStatus) {
 	}
 }
 
-// getCITargets is a helper that returns first occurance of the group in re
+// getCITargets is a helper that returns first occurance of the group in re in the string url
 // and err if regexp does not match
 func getCITargets(re *regexp.Regexp, url string) (string, error) {
 	matches := re.FindStringSubmatch(url)

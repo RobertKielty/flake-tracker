@@ -28,7 +28,7 @@ VERSION ?= 0.0.1
 ### These variables should not need tweaking.
 ###
 
-SRC_DIRS := cmd # directories which hold app source in the order in which you want them built (not vendored)
+SRC_DIRS := cmd pkg # space delimited directories which hold app source in the order in which you want them built (not vendored)
 
 ALL_PLATFORMS := linux/amd64 linux/arm linux/arm64 linux/ppc64le linux/s390x windows/amd64
 
