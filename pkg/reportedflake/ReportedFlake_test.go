@@ -53,6 +53,47 @@ Testgrid link:
 				"[sig-api-machinery] CustomResourcePublishOpenAPI [Privileged:ClusterAdmin] works for CRD preserving unknown fields in an embedded object [Conformance]",
 			},
 		},
+		{
+			"Broken Issue from GH",
+	``		
+<!-- Please only use this template for submitting reports about continuously failing tests or jobs in Kubernetes CI -->
+**Which jobs are failing**:
+`ci-cluster-api-provider-gcp-make-conformance-v1alpha3-k8s-ci-artifacts`
+
+**Which test(s) are failing**:
+`[sig-auth] ServiceAccounts should mount projected service account token [Conformance]`
+
+**Since when has it been failing**:
+Since the test was enabled ~Nov 17 sometimes between 12:24PST and 16:26PST
+
+**Testgrid link**:
+https://testgrid.k8s.io/sig-release-master-informing#capg-conformance-v1alpha3-k8s-master
+
+**Reason for failure**:
+```
+Nov 18 01:19:47.700: INFO: Failed to get logs from node "test1-md-0-khxtx" pod "test-pod-3b2e2611-51cb-4605-b404-c525e52751f0" container "agnhost-container": the server rejected our request for an unknown reason (get pods test-pod-3b2e2611-51cb-4605-b404-c525e52751f0)
+ï¿½[1mSTEPï¿½[0m: delete the pod
+Nov 18 01:19:47.739: INFO: Waiting for pod test-pod-3b2e2611-51cb-4605-b404-c525e52751f0 to disappear
+Nov 18 01:19:47.768: INFO: Pod test-pod-3b2e2611-51cb-4605-b404-c525e52751f0 no longer exists
+Nov 18 01:19:47.769: FAIL: Unexpected error:
+    <*errors.errorString | 0xc00296e2f0>: {
+        s: "expected pod \"test-pod-3b2e2611-51cb-4605-b404-c525e52751f0\" success: Gave up after waiting 5m0s for pod \"test-pod-3b2e2611-51cb-4605-b404-c525e52751f0\" to be \"Succeeded or Failed\"",
+    }
+    expected pod "test-pod-3b2e2611-51cb-4605-b404-c525e52751f0" success: Gave up after waiting 5m0s for pod "test-pod-3b2e2611-51cb-4605-b404-c525e52751f0" to be "Succeeded or Failed"
+occurred
+```
+
+**Anything else we need to know**:
+/sig auth cluster-lifecycle
+/area provider/gcp
+/cc @kubernetes/ci-signal ''',
+
+			[] string {
+				"[sig-auth] ServiceAccounts should mount projected service account token [Conformance]`"
+			}
+
+		}
+
 	}
 	// Instantiate a Rported Flake
 	var rf ReportedFlake
