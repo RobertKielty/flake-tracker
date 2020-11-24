@@ -31,13 +31,14 @@ func collectData(cs *ci.CiStatus, rf *rf.ReportedFlake) {
 	cs.CollectStatus()
 	cs.CollectFlakyTests()
 	cs.CollectFailedTests()
-	rf.CollectIssuesFromBoard(cs)
+	rf.CollectIssuesFromBoard()
 }
 
 func main() {
 	var startTime = time.Now()
 	var ciStatusLogger = setUpLogging("ci-status", startTime)
 	var ghLogger = setUpLogging("gh-logger", startTime)
+	var destDir = "/home/robertkielty/go/src/k8s.io/sig-release/releases/release-1.20/meeting-updates/ci-status/"
 
 	tgBlocking := &ci.CiStatus{
 		Name:        "sig-release-master-blocking",
@@ -49,8 +50,16 @@ func main() {
 		CiStatus: tgBlocking,
 	}
 	collectData(tgBlocking, reportedFlake) // TODO decouple ciStatus && reportedFlake
-	rep.RunMarkdownSummaryReport(*tgBlocking)
-	tgBlocking.Logger.Writer().Close()
+
+	s, err := os.OpenFile(destDir + "rel-summary.md", os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	f, err := os.OpenFile(destDir + "rel-full.md", os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	tgInforming := &ci.CiStatus{
 		Name:        "sig-release-master-informing",
@@ -62,8 +71,11 @@ func main() {
 		CiStatus: tgInforming,
 	}
 	collectData(tgInforming, reportedFlake) // TODO decouple ciStatus && reportedFlake
-	rep.RunMarkdownSummaryReport(*tgInforming)
+
+	rep.RunReportFromTemplateFile("./pkg/report/templates/md-status-summary.tmpl", s, *tgBlocking, *tgInforming, )
+	rep.RunReportFromTemplateFile("./pkg/report/templates/md-status-full.tmpl", f, *tgBlocking, *tgInforming )
 	tgInforming.Logger.Writer().Close()
+	tgBlocking.Logger.Writer().Close()
 }
 
 func setUpLogging(name string, startTime time.Time) *log.Logger {
@@ -79,9 +91,10 @@ func setUpLogging(name string, startTime time.Time) *log.Logger {
 		ForceColors: true,
 	})
 	logger.SetLevel(log.TraceLevel)
+	log.SetReportCaller(true)
 
 	// For now, one human readable log file with datetime stamp per run
-	file, err := os.OpenFile(logFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(logFilename, os.O_CREATE|os.O_WRONLY, 0666)
 
 	if err == nil {
 		logger.Out = file
