@@ -6,6 +6,7 @@ import (
 	"time"
 
 	ci "github.com/RobertKielty/flake-tracker/pkg/cistatus"
+	rep "github.com/RobertKielty/flake-tracker/pkg/report"
 	rf "github.com/RobertKielty/flake-tracker/pkg/reportedflake"
 	log "github.com/sirupsen/logrus"
 )
@@ -30,90 +31,17 @@ func collectData(cs *ci.CiStatus, rf *rf.ReportedFlake) {
 	cs.CollectStatus()
 	cs.CollectFlakyTests()
 	cs.CollectFailedTests()
-	rf.CollectIssuesFromBoard(cs)
-}
-
-// runs a report against on the jobs in tab group status summary for jobs
-// that are flaking, failed and passing
-func runReport(cs *ci.CiStatus) {
-
-	reportStartTime := cs.CollectedAt.Format(time.UnixDate)
-	flakeCount := 0
-	failCount := 0
-	passingCount := 0
-
-	for jobName, job := range cs.FlakingJobs {
-		flakeCount++
-		results := job.JobTestResults
-		for i, flakyTest := range results.Tests {
-			// jobOwner,
-			if len(flakyTest.LinkedBugs) > 0 {
-				for _, reportedBy := range flakyTest.LinkedBugs {
-					fmt.Printf(`%s,%s,%s,"%d of %d","%s","%s","%s","%T - %v"`+"\n",
-						reportStartTime,
-						job.OverallStatus,
-						jobName,
-						i+1,
-						len(results.Tests),
-						flakyTest.Name,
-						job.Url,
-						flakyTest.Sig,
-						reportedBy,
-						reportedBy)
-				}
-			} else {
-				fmt.Printf(`%s,%s,%s,"%d of %d","%s","%s","%s"`+"\n",
-					reportStartTime,
-					job.OverallStatus,
-					jobName,
-					i+1,
-					len(results.Tests),
-					flakyTest.Name,
-					job.Url,
-					flakyTest.Sig)
-			}
-		}
-	}
-
-	for jobName, jobStatus := range cs.FailedJobs {
-		failCount++
-		jobFailedTests := jobStatus.JobTestResults
-		for _, failedTest := range jobFailedTests.Tests {
-			fmt.Printf("%s,%s,%s,\"%s\",\"%s\",%s\n",
-				cs.CollectedAt.Format(time.UnixDate),
-				jobStatus.OverallStatus, jobName, failedTest.Sig,
-				failedTest.Name, jobStatus.Url)
-		}
-	}
-
-	for jobName, jobStatus := range cs.PassingJobs {
-		passingCount++
-		fmt.Printf("%s,%s,%s,\"%s\",\"%s\",%s\n",
-			cs.CollectedAt.Format(time.UnixDate),
-			jobStatus.OverallStatus, jobName, "", "", jobStatus.Url)
-	}
-	totalCount := flakeCount + failCount + passingCount
-
-	// TODO Summary report
-	// Overview, Percentages and Status (RYG) calculation
-	fmt.Printf("\"%s\",Total/Failing/Flaking/Passing, %d,%d,%d,%d\n",
-		reportStartTime, totalCount, failCount, flakeCount, passingCount)
-	fmt.Printf("\"%s\", Percentage Failing/Flaking/Passing, %2.1f ,%2.1f ,%2.1f\n",
-		reportStartTime,
-		float64(failCount)/float64(totalCount)*100,
-		float64(flakeCount)/(float64(totalCount))*100,
-		float64(passingCount)/float64(totalCount)*100)
-
+	rf.CollectIssuesFromBoard()
 }
 
 func main() {
 	var startTime = time.Now()
-	// TODO this is messed up!
 	var ciStatusLogger = setUpLogging("ci-status", startTime)
 	var ghLogger = setUpLogging("gh-logger", startTime)
+	var destDir = "/home/robertkielty/go/src/k8s.io/sig-release/releases/release-1.20/meeting-updates/ci-status/"
 
 	tgBlocking := &ci.CiStatus{
-		Name:        "sig-release-master-informing",
+		Name:        "sig-release-master-blocking",
 		CollectedAt: startTime,
 		Logger:      ciStatusLogger,
 	}
@@ -121,8 +49,32 @@ func main() {
 		Logger:   ghLogger,
 		CiStatus: tgBlocking,
 	}
-	collectData(tgBlocking, reportedFlake) // TODO ciStatus && reportedFlake need to be decoupled
-	runReport(tgBlocking)                  // TODO extract runReport to a reporter class parameterised on format
+	collectData(tgBlocking, reportedFlake) // TODO decouple ciStatus && reportedFlake
+
+	s, err := os.OpenFile(destDir + "rel-summary.md", os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	f, err := os.OpenFile(destDir + "rel-full.md", os.O_RDWR|os.O_CREATE, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tgInforming := &ci.CiStatus{
+		Name:        "sig-release-master-informing",
+		CollectedAt: startTime,
+		Logger:      ciStatusLogger,
+	}
+	reportedFlake = &rf.ReportedFlake{
+		Logger:   ghLogger,
+		CiStatus: tgInforming,
+	}
+	collectData(tgInforming, reportedFlake) // TODO decouple ciStatus && reportedFlake
+
+	rep.RunReportFromTemplateFile("./pkg/report/templates/md-status-summary.tmpl", s, *tgBlocking, *tgInforming, )
+	rep.RunReportFromTemplateFile("./pkg/report/templates/md-status-full.tmpl", f, *tgBlocking, *tgInforming )
+	tgInforming.Logger.Writer().Close()
 	tgBlocking.Logger.Writer().Close()
 }
 
@@ -134,11 +86,15 @@ func setUpLogging(name string, startTime time.Time) *log.Logger {
 		logger        = log.New()
 	)
 
-	logger.SetFormatter(&log.JSONFormatter{})
+	// 	logger.SetFormatter(&log.JSONFormatter{})
+	logger.SetFormatter(&log.TextFormatter{
+		ForceColors: true,
+	})
 	logger.SetLevel(log.TraceLevel)
+	log.SetReportCaller(true)
 
 	// For now, one human readable log file with datetime stamp per run
-	file, err := os.OpenFile(logFilename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	file, err := os.OpenFile(logFilename, os.O_CREATE|os.O_WRONLY, 0666)
 
 	if err == nil {
 		logger.Out = file
